@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SmartTest – Batching Quiz</title>
+<title>SmartTest – اختبار ذكي مدفوع</title>
 
 <style>
 body{
@@ -43,6 +43,7 @@ button:disabled{background:#777}
 }
 .status.error{background:#8b2e2e}
 .status.loading{background:#444}
+.status.success{background:#2e8b57}
 .question{
     background:#1d6079;
     padding:15px;
@@ -70,14 +71,16 @@ button:disabled{background:#777}
 
 <body>
 <div class="container">
-<h1>🚀 SmartTest – اختبار ذكي</h1>
+<h1>🚀 SmartTest – اختبار ذكي مدفوع</h1>
 
-<input id="topic" placeholder="اكتب موضوع الاختبار (مثال: قواعد النحو)">
+<input id="license" placeholder="🔑 أدخل مفتاح التفعيل (License Key)">
+<input id="topic" placeholder="📘 اكتب موضوع الاختبار">
 <select id="language">
     <option value="ar">عربي</option>
     <option value="en">English</option>
 </select>
 <select id="count">
+    <option value="5">5</option>
     <option value="10">10</option>
     <option value="20">20</option>
     <option value="60">60</option>
@@ -85,16 +88,16 @@ button:disabled{background:#777}
     <option value="200">200</option>
 </select>
 
-<button id="generateBtn">توليد الاختبار</button>
+<button id="generateBtn">🚀 توليد الاختبار</button>
 
 <div id="status"></div>
 <div id="output"></div>
 </div>
 
 <script>
-/* 🔴 endpoint الصحيح بعد التحديث */
 const API_URL = "https://batching-project.onrender.com/generate/batch";
 
+const licenseInput = document.getElementById("license");
 const topicInput   = document.getElementById("topic");
 const languageSel  = document.getElementById("language");
 const countSel     = document.getElementById("count");
@@ -111,19 +114,29 @@ function setStatus(text,type="loading"){
 
 async function generate(){
     outputBox.innerHTML="";
-    const topic = topicInput.value.trim();
+
+    const license = licenseInput.value.trim();
+    const topic   = topicInput.value.trim();
+
+    if(!license){
+        setStatus("❌ أدخل مفتاح التفعيل","error");
+        return;
+    }
     if(!topic){
         setStatus("❌ أدخل موضوع الاختبار","error");
         return;
     }
 
     btn.disabled=true;
-    setStatus("⏳ جارٍ توليد الأسئلة باستخدام batching…");
+    setStatus("⏳ جارٍ توليد الأسئلة…","loading");
 
     try{
         const res = await fetch(API_URL,{
             method:"POST",
-            headers:{ "Content-Type":"application/json" },
+            headers:{
+                "Content-Type":"application/json",
+                "license-key": license
+            },
             body:JSON.stringify({
                 topic: topic,
                 language: languageSel.value,
@@ -132,18 +145,19 @@ async function generate(){
         });
 
         if(!res.ok){
-            const t = await res.text();
-            throw new Error(t);
+            const err = await res.json();
+            throw new Error(err.detail || "خطأ غير معروف");
         }
 
         const data = await res.json();
 
         if(!data.questions || !Array.isArray(data.questions)){
-            throw new Error("لم يتم استلام أسئلة صالحة من الخادم");
+            throw new Error("الاستجابة غير صالحة");
         }
 
         renderQuestions(data.questions);
-        setStatus(`✅ تم توليد ${data.questions.length} سؤال بنجاح`);
+        setStatus(`✅ تم توليد ${data.questions.length} سؤال بنجاح`,"success");
+
     }catch(err){
         setStatus("❌ فشل في التوليد: "+err.message,"error");
     }finally{

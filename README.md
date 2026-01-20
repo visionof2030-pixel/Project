@@ -6,67 +6,75 @@
 <title>Batching Quiz Generator</title>
 
 <style>
-body {
-    background:#0f3c4c;
-    font-family:Tahoma;
-    color:#fff;
+body{
     margin:0;
+    font-family:Tahoma;
+    background:#0f3c4c;
+    color:#fff;
     padding:20px;
 }
-.container {
+.container{
     max-width:900px;
     margin:auto;
     background:#164b5f;
     padding:20px;
-    border-radius:12px;
+    border-radius:14px;
 }
-h1 {
+h1{
     text-align:center;
     margin-bottom:20px;
 }
-input, select, button {
+input,select,button{
     width:100%;
     padding:12px;
     margin:8px 0;
-    border-radius:6px;
+    border-radius:8px;
     border:none;
     font-size:16px;
 }
-button {
+button{
     background:#3fa34d;
     color:#fff;
     font-weight:bold;
     cursor:pointer;
 }
-button:disabled {
+button:disabled{
     background:#777;
 }
-.question {
+.question{
     background:#1d6079;
-    padding:15px;
-    border-radius:8px;
     margin-top:15px;
+    padding:15px;
+    border-radius:10px;
 }
-.option {
+.option{
     background:#124050;
-    padding:10px;
     margin:6px 0;
+    padding:10px;
     border-radius:6px;
     cursor:pointer;
 }
-.option:hover {background:#1b6b86}
-.correct {background:#2e8b57 !important}
-.wrong {background:#8b2e2e !important}
-.feedback {
+.option:hover{
+    background:#1b6b86;
+}
+.option.correct{
+    background:#2e8b57;
+}
+.option.wrong{
+    background:#8b2e2e;
+}
+.feedback{
     background:#0c2f3b;
-    padding:12px;
+    padding:10px;
     margin-top:10px;
     border-radius:6px;
 }
-.hidden {display:none}
-.loader {
-    margin-top:15px;
+.hidden{
+    display:none;
+}
+.loader{
     text-align:center;
+    margin-top:15px;
 }
 </style>
 </head>
@@ -75,30 +83,29 @@ button:disabled {
 <div class="container">
 <h1>🚀 Batching Quiz Generator</h1>
 
-<input id="topic" placeholder="اكتب موضوع الاختبار هنا">
-
+<input id="topic" placeholder="اكتب موضوع الاختبار">
 <select id="language">
     <option value="ar">عربي</option>
     <option value="en">English</option>
 </select>
 
 <select id="count">
-    <option>5</option>
-    <option selected>10</option>
-    <option>20</option>
-    <option>30</option>
-    <option>40</option>
-    <option>60</option>
+    <option value="5">5</option>
+    <option value="10" selected>10</option>
+    <option value="20">20</option>
+    <option value="40">40</option>
+    <option value="60">60</option>
+    <option value="100">100</option>
+    <option value="200">200</option>
 </select>
 
 <button id="btn" onclick="generate()">توليد الاختبار</button>
-
 <div id="loader" class="loader hidden">⏳ جاري التوليد...</div>
 <div id="output"></div>
 </div>
 
 <script>
-const BACKEND = "https://batching-project.onrender.com";
+const API = "https://batching-project.onrender.com/generate";
 
 async function generate(){
     const topic = document.getElementById("topic").value.trim();
@@ -112,7 +119,7 @@ async function generate(){
     document.getElementById("output").innerHTML = "";
 
     try{
-        const res = await fetch(`${BACKEND}/generate`,{
+        const res = await fetch(API,{
             method:"POST",
             headers:{
                 "Content-Type":"application/json"
@@ -120,20 +127,18 @@ async function generate(){
             body:JSON.stringify({
                 topic: topic,
                 language: document.getElementById("language").value,
-                total_questions: Number(document.getElementById("count").value)
+                total_questions: parseInt(document.getElementById("count").value)
             })
         });
 
         if(!res.ok){
-            throw new Error("HTTP " + res.status);
+            throw new Error("Load failed");
         }
 
         const data = await res.json();
         renderQuiz(data.questions);
-
     }catch(e){
         alert("حدث خطأ أثناء التوليد");
-        console.error(e);
     }
 
     document.getElementById("btn").disabled = false;
@@ -146,38 +151,40 @@ function renderQuiz(questions){
         html += `
         <div class="question">
             <b>${i+1}. ${q.q}</b>
-            ${q.options.map((o,idx)=>`
-                <div class="option"
-                     onclick="choose(this,${idx},${q.answer},${JSON.stringify(q.explanations)})">
-                     ${o}
+            ${q.options.map((op,idx)=>`
+                <div class="option" onclick="choose(this,${idx},${q.answer},${encodeURIComponent(JSON.stringify(q.explanations))})">
+                    ${op}
                 </div>
             `).join("")}
             <div class="feedback hidden"></div>
-        </div>`;
+        </div>
+        `;
     });
     document.getElementById("output").innerHTML = html;
 }
 
-function choose(el,idx,answer,exps){
+function choose(el,idx,answer,expsEncoded){
     const box = el.parentElement;
     const fb = box.querySelector(".feedback");
-    fb.classList.remove("hidden");
+    const explanations = JSON.parse(decodeURIComponent(expsEncoded));
 
-    let html = "<b>التغذية الراجعة:</b><br>";
-    exps.forEach((e,i)=>{
-        if(i === answer){
-            html += `<div style="color:#9fffbc;margin-top:6px"><b>✔ الصحيح:</b> ${e}</div>`;
-        }else{
-            html += `<div style="color:#ffd2d2;margin-top:6px"><b>✖ خطأ:</b> ${e}</div>`;
-        }
-    });
-    fb.innerHTML = html;
-
-    [...box.querySelectorAll(".option")].forEach((o,i)=>{
+    box.querySelectorAll(".option").forEach((o,i)=>{
         o.onclick = null;
         if(i === answer) o.classList.add("correct");
         else if(i === idx) o.classList.add("wrong");
     });
+
+    let html = "<b>التغذية الراجعة:</b><br>";
+    explanations.forEach((e,i)=>{
+        if(i === answer){
+            html += `<div style="color:#9fffbc;margin-top:6px"><b>✔ الإجابة الصحيحة:</b> ${e}</div>`;
+        }else{
+            html += `<div style="color:#ffd2d2;margin-top:6px"><b>✖ خيار خاطئ:</b> ${e}</div>`;
+        }
+    });
+
+    fb.innerHTML = html;
+    fb.classList.remove("hidden");
 }
 </script>
 </body>

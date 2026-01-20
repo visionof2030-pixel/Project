@@ -8,28 +8,25 @@
 <style>
 body{
     margin:0;
-    font-family:Tahoma;
+    padding:20px;
+    font-family:Tahoma,Arial,sans-serif;
     background:#0f3c4c;
     color:#fff;
-    padding:20px;
 }
 .container{
     max-width:900px;
     margin:auto;
     background:#164b5f;
     padding:20px;
-    border-radius:14px;
+    border-radius:12px;
 }
-h1{
-    text-align:center;
-    margin-bottom:20px;
-}
+h1{text-align:center}
 input,select,button{
     width:100%;
     padding:12px;
-    margin:8px 0;
-    border-radius:8px;
+    margin:10px 0;
     border:none;
+    border-radius:8px;
     font-size:16px;
 }
 button{
@@ -38,43 +35,35 @@ button{
     font-weight:bold;
     cursor:pointer;
 }
-button:disabled{
-    background:#777;
+button:disabled{background:#777}
+.status{
+    margin-top:10px;
+    padding:10px;
+    border-radius:8px;
 }
+.status.error{background:#8b2e2e}
+.status.loading{background:#444}
 .question{
     background:#1d6079;
-    margin-top:15px;
     padding:15px;
-    border-radius:10px;
+    border-radius:8px;
+    margin-top:15px;
 }
 .option{
     background:#124050;
-    margin:6px 0;
     padding:10px;
+    margin:6px 0;
     border-radius:6px;
     cursor:pointer;
 }
-.option:hover{
-    background:#1b6b86;
-}
-.option.correct{
-    background:#2e8b57;
-}
-.option.wrong{
-    background:#8b2e2e;
-}
+.option:hover{background:#1b6b86}
+.option.correct{background:#2e8b57}
+.option.wrong{background:#8b2e2e}
 .feedback{
     background:#0c2f3b;
     padding:10px;
     margin-top:10px;
     border-radius:6px;
-}
-.hidden{
-    display:none;
-}
-.loader{
-    text-align:center;
-    margin-top:15px;
 }
 </style>
 </head>
@@ -88,7 +77,6 @@ button:disabled{
     <option value="ar">عربي</option>
     <option value="en">English</option>
 </select>
-
 <select id="count">
     <option value="5">5</option>
     <option value="10" selected>10</option>
@@ -99,92 +87,114 @@ button:disabled{
     <option value="200">200</option>
 </select>
 
-<button id="btn" onclick="generate()">توليد الاختبار</button>
-<div id="loader" class="loader hidden">⏳ جاري التوليد...</div>
+<button id="generateBtn">توليد الاختبار</button>
+
+<div id="status"></div>
 <div id="output"></div>
 </div>
 
 <script>
-const API = "https://batching-project.onrender.com/generate";
+const API_URL = "https://batching-project.onrender.com/generate/batch";
+
+const topicInput   = document.getElementById("topic");
+const languageSel  = document.getElementById("language");
+const countSel     = document.getElementById("count");
+const btn          = document.getElementById("generateBtn");
+const statusBox    = document.getElementById("status");
+const outputBox    = document.getElementById("output");
+
+btn.addEventListener("click", generate);
+
+function setStatus(text,type="loading"){
+    statusBox.className="status "+type;
+    statusBox.innerText=text;
+}
 
 async function generate(){
-    const topic = document.getElementById("topic").value.trim();
+    outputBox.innerHTML="";
+    const topic = topicInput.value.trim();
     if(!topic){
-        alert("اكتب موضوع الاختبار");
+        setStatus("❌ أدخل موضوع الاختبار","error");
         return;
     }
 
-    document.getElementById("btn").disabled = true;
-    document.getElementById("loader").classList.remove("hidden");
-    document.getElementById("output").innerHTML = "";
+    btn.disabled=true;
+    setStatus("⏳ جاري التوليد باستخدام batching…");
 
     try{
-        const res = await fetch(API,{
+        const res = await fetch(API_URL,{
             method:"POST",
-            headers:{
-                "Content-Type":"application/json"
-            },
+            headers:{ "Content-Type":"application/json" },
             body:JSON.stringify({
                 topic: topic,
-                language: document.getElementById("language").value,
-                total_questions: parseInt(document.getElementById("count").value)
+                language: languageSel.value,
+                total_questions: Number(countSel.value)
             })
         });
 
         if(!res.ok){
-            throw new Error("Load failed");
+            const t = await res.text();
+            throw new Error(t);
         }
 
-        const data = await res.json();
-        renderQuiz(data.questions);
-    }catch(e){
-        alert("حدث خطأ أثناء التوليد");
+        const payload = await res.json();
+
+        if(!payload.data || !Array.isArray(payload.data.questions)){
+            throw new Error("لم يتم استلام أسئلة من الخادم");
+        }
+
+        renderQuestions(payload.data.questions);
+        setStatus("✅ تم التوليد بنجاح");
+    }catch(err){
+        setStatus("❌ فشل في التوليد: "+err.message,"error");
+    }finally{
+        btn.disabled=false;
     }
-
-    document.getElementById("btn").disabled = false;
-    document.getElementById("loader").classList.add("hidden");
 }
 
-function renderQuiz(questions){
-    let html = "";
+function renderQuestions(questions){
+    outputBox.innerHTML="";
     questions.forEach((q,i)=>{
-        html += `
-        <div class="question">
-            <b>${i+1}. ${q.q}</b>
-            ${q.options.map((op,idx)=>`
-                <div class="option" onclick="choose(this,${idx},${q.answer},${encodeURIComponent(JSON.stringify(q.explanations))})">
-                    ${op}
-                </div>
-            `).join("")}
-            <div class="feedback hidden"></div>
-        </div>
-        `;
+        const qBox=document.createElement("div");
+        qBox.className="question";
+        qBox.innerHTML=`<b>${i+1}. ${q.q}</b>`;
+
+        q.options.forEach((opt,idx)=>{
+            const o=document.createElement("div");
+            o.className="option";
+            o.textContent=opt;
+            o.onclick=()=>choose(o,idx,q.answer,q.explanations,qBox);
+            qBox.appendChild(o);
+        });
+
+        const fb=document.createElement("div");
+        fb.className="feedback";
+        fb.style.display="none";
+        qBox.appendChild(fb);
+
+        outputBox.appendChild(qBox);
     });
-    document.getElementById("output").innerHTML = html;
 }
 
-function choose(el,idx,answer,expsEncoded){
-    const box = el.parentElement;
-    const fb = box.querySelector(".feedback");
-    const explanations = JSON.parse(decodeURIComponent(expsEncoded));
+function choose(el,idx,answer,exps,box){
+    const fb=box.querySelector(".feedback");
+    fb.style.display="block";
+
+    let html="<b>التغذية الراجعة:</b><br>";
+    exps.forEach((e,i)=>{
+        if(i===answer){
+            html+=`<div style="color:#9fffbc"><b>✔ الإجابة الصحيحة:</b> ${e}</div>`;
+        }else{
+            html+=`<div style="color:#ffd2d2"><b>✖ خيار خاطئ:</b> ${e}</div>`;
+        }
+    });
+    fb.innerHTML=html;
 
     box.querySelectorAll(".option").forEach((o,i)=>{
-        o.onclick = null;
-        if(i === answer) o.classList.add("correct");
-        else if(i === idx) o.classList.add("wrong");
+        o.onclick=null;
+        if(i===answer) o.classList.add("correct");
+        else if(i===idx) o.classList.add("wrong");
     });
-
-    let html = "<b>التغذية الراجعة:</b><br>";
-    explanations.forEach((e,i)=>{
-        if(i === answer){
-            html += `<div style="color:#9fffbc;margin-top:6px"><b>✔ الإجابة الصحيحة:</b> ${e}</div>`;
-        }else{
-            html += `<div style="color:#ffd2d2;margin-top:6px"><b>✖ خيار خاطئ:</b> ${e}</div>`;
-        }
-    });
-
-    fb.innerHTML = html;
-    fb.classList.remove("hidden");
 }
 </script>
 </body>

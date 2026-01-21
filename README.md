@@ -2,13 +2,13 @@
 <html lang="ar" dir="rtl">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>SmartTest – اختبار ذكي مدفوع</title>
 
 <style>
 body{
     margin:0;
-    padding:20px;
+    padding:16px;
     font-family:Tahoma,Arial,sans-serif;
     background:#0f3c4c;
     color:#fff;
@@ -17,78 +17,93 @@ body{
     max-width:900px;
     margin:auto;
     background:#164b5f;
-    padding:20px;
+    padding:16px;
     border-radius:12px;
 }
-h1{text-align:center}
+h1{text-align:center;margin-bottom:10px}
 input,select,button{
     width:100%;
-    padding:12px;
-    margin:10px 0;
+    padding:14px;
+    margin:8px 0;
     border:none;
-    border-radius:8px;
+    border-radius:10px;
     font-size:16px;
 }
 button{
     background:#3fa34d;
     color:#fff;
     font-weight:bold;
-    cursor:pointer;
 }
-button:disabled{background:#777}
+button:disabled{
+    background:#777;
+}
 .status{
     margin-top:10px;
     padding:10px;
     border-radius:8px;
+    font-size:15px;
 }
 .status.error{background:#8b2e2e}
 .status.loading{background:#444}
 .status.success{background:#2e8b57}
+
+.section{
+    margin-top:15px;
+}
+
 .question{
     background:#1d6079;
-    padding:15px;
-    border-radius:8px;
-    margin-top:15px;
+    padding:14px;
+    border-radius:10px;
+    margin-top:12px;
 }
 .option{
     background:#124050;
     padding:10px;
     margin:6px 0;
-    border-radius:6px;
-    cursor:pointer;
+    border-radius:8px;
 }
-.option:hover{background:#1b6b86}
 .option.correct{background:#2e8b57}
 .option.wrong{background:#8b2e2e}
 .feedback{
     background:#0c2f3b;
     padding:10px;
-    margin-top:10px;
-    border-radius:6px;
+    margin-top:8px;
+    border-radius:8px;
 }
 </style>
 </head>
 
 <body>
 <div class="container">
-<h1>🚀 SmartTest – اختبار ذكي مدفوع</h1>
+<h1>🧠 SmartTest – اختبار ذكي</h1>
 
-<input id="license" placeholder="🔑 أدخل مفتاح التفعيل (License Key)">
-<input id="topic" placeholder="📘 اكتب موضوع الاختبار">
-<select id="language">
+<!-- ====== تفعيل المفتاح ====== -->
+<div class="section">
+<input id="licenseInput" placeholder="🔑 أدخل مفتاح التفعيل">
+<button id="activateBtn">تفعيل المفتاح</button>
+</div>
+
+<!-- ====== إعدادات الاختبار ====== -->
+<div class="section">
+<input id="topic" placeholder="📘 موضوع الاختبار" disabled>
+
+<select id="language" disabled>
     <option value="ar">عربي</option>
     <option value="en">English</option>
 </select>
-<select id="count">
-    <option value="5">5</option>
-    <option value="10">10</option>
-    <option value="20">20</option>
-    <option value="60">60</option>
-    <option value="100">100</option>
-    <option value="200">200</option>
+
+<select id="count" disabled>
+    <option value="5">5 أسئلة</option>
+    <option value="10">10 أسئلة</option>
+    <option value="20">20 سؤال</option>
+    <option value="60">60 سؤال</option>
+    <option value="100">100 سؤال</option>
+    <option value="200">200 سؤال</option>
 </select>
 
-<button id="generateBtn">🚀 توليد الاختبار</button>
+<button id="generateBtn" disabled>🚀 توليد الاختبار</button>
+</div>
 
 <div id="status"></div>
 <div id="output"></div>
@@ -97,37 +112,84 @@ button:disabled{background:#777}
 <script>
 const API_URL = "https://batching-project.onrender.com/generate/batch";
 
-const licenseInput = document.getElementById("license");
-const topicInput   = document.getElementById("topic");
-const languageSel  = document.getElementById("language");
-const countSel     = document.getElementById("count");
-const btn          = document.getElementById("generateBtn");
-const statusBox    = document.getElementById("status");
-const outputBox    = document.getElementById("output");
+let ACTIVE_LICENSE = null;
 
-btn.addEventListener("click", generate);
+const licenseInput = document.getElementById("licenseInput");
+const activateBtn  = document.getElementById("activateBtn");
+
+const topicInput  = document.getElementById("topic");
+const languageSel = document.getElementById("language");
+const countSel    = document.getElementById("count");
+const generateBtn = document.getElementById("generateBtn");
+
+const statusBox = document.getElementById("status");
+const outputBox = document.getElementById("output");
 
 function setStatus(text,type="loading"){
     statusBox.className="status "+type;
     statusBox.innerText=text;
 }
 
-async function generate(){
-    outputBox.innerHTML="";
-
-    const license = licenseInput.value.trim();
-    const topic   = topicInput.value.trim();
-
-    if(!license){
+/* ====== تفعيل المفتاح ====== */
+activateBtn.onclick = async ()=>{
+    const key = licenseInput.value.trim();
+    if(!key){
         setStatus("❌ أدخل مفتاح التفعيل","error");
         return;
     }
+
+    activateBtn.disabled = true;
+    setStatus("⏳ جارٍ التحقق من المفتاح…","loading");
+
+    try{
+        const res = await fetch(API_URL,{
+            method:"POST",
+            headers:{
+                "Content-Type":"application/json",
+                "license-key": key
+            },
+            body:JSON.stringify({
+                topic:"اختبار",
+                language:"ar",
+                total_questions:1
+            })
+        });
+
+        if(!res.ok){
+            const err = await res.json();
+            throw new Error(err.detail || "مفتاح غير صالح");
+        }
+
+        ACTIVE_LICENSE = key;
+
+        topicInput.disabled = false;
+        languageSel.disabled = false;
+        countSel.disabled = false;
+        generateBtn.disabled = false;
+
+        setStatus("✅ تم تفعيل المفتاح بنجاح","success");
+    }catch(e){
+        setStatus("❌ فشل التفعيل: "+e.message,"error");
+        activateBtn.disabled = false;
+    }
+};
+
+/* ====== توليد الاختبار ====== */
+generateBtn.onclick = async ()=>{
+    outputBox.innerHTML="";
+
+    if(!ACTIVE_LICENSE){
+        setStatus("❌ يجب تفعيل المفتاح أولاً","error");
+        return;
+    }
+
+    const topic = topicInput.value.trim();
     if(!topic){
         setStatus("❌ أدخل موضوع الاختبار","error");
         return;
     }
 
-    btn.disabled=true;
+    generateBtn.disabled = true;
     setStatus("⏳ جارٍ توليد الأسئلة…","loading");
 
     try{
@@ -135,7 +197,7 @@ async function generate(){
             method:"POST",
             headers:{
                 "Content-Type":"application/json",
-                "license-key": license
+                "license-key": ACTIVE_LICENSE
             },
             body:JSON.stringify({
                 topic: topic,
@@ -146,67 +208,47 @@ async function generate(){
 
         if(!res.ok){
             const err = await res.json();
-            throw new Error(err.detail || "خطأ غير معروف");
+            throw new Error(err.detail || "فشل التوليد");
         }
 
         const data = await res.json();
-
-        if(!data.questions || !Array.isArray(data.questions)){
-            throw new Error("الاستجابة غير صالحة");
-        }
-
         renderQuestions(data.questions);
-        setStatus(`✅ تم توليد ${data.questions.length} سؤال بنجاح`,"success");
 
-    }catch(err){
-        setStatus("❌ فشل في التوليد: "+err.message,"error");
+        setStatus(`✅ تم توليد ${data.questions.length} سؤال`,"success");
+    }catch(e){
+        setStatus("❌ "+e.message,"error");
     }finally{
-        btn.disabled=false;
+        generateBtn.disabled = false;
     }
-}
+};
 
 function renderQuestions(questions){
     outputBox.innerHTML="";
     questions.forEach((q,i)=>{
-        const qBox=document.createElement("div");
-        qBox.className="question";
-        qBox.innerHTML=`<b>${i+1}. ${q.q}</b>`;
+        const box=document.createElement("div");
+        box.className="question";
+        box.innerHTML=`<b>${i+1}. ${q.q}</b>`;
 
         q.options.forEach((opt,idx)=>{
             const o=document.createElement("div");
             o.className="option";
-            o.textContent=opt;
-            o.onclick=()=>choose(o,idx,q.answer,q.explanations,qBox);
-            qBox.appendChild(o);
+            o.innerText=opt;
+            o.onclick=()=>{
+                box.querySelectorAll(".option").forEach((el,j)=>{
+                    el.onclick=null;
+                    if(j===q.answer) el.classList.add("correct");
+                    else if(j===idx) el.classList.add("wrong");
+                });
+
+                const fb=document.createElement("div");
+                fb.className="feedback";
+                fb.innerHTML=q.explanations.join("<br>");
+                box.appendChild(fb);
+            };
+            box.appendChild(o);
         });
 
-        const fb=document.createElement("div");
-        fb.className="feedback";
-        fb.style.display="none";
-        qBox.appendChild(fb);
-
-        outputBox.appendChild(qBox);
-    });
-}
-
-function choose(el,idx,answer,exps,box){
-    const fb=box.querySelector(".feedback");
-    fb.style.display="block";
-
-    let html="<b>التغذية الراجعة:</b><br>";
-    exps.forEach((e,i)=>{
-        if(i===answer){
-            html+=`<div style="color:#9fffbc"><b>✔ الإجابة الصحيحة:</b> ${e}</div>`;
-        }else{
-            html+=`<div style="color:#ffd2d2"><b>✖ خيار خاطئ:</b> ${e}</div>`;
-        }
-    });
-    fb.innerHTML=html;
-
-    box.querySelectorAll(".option").forEach((o,i)=>{
-        o.onclick=null;
-        if(i===answer) o.classList.add("correct");
-        else if(i===idx) o.classList.add("wrong");
+        outputBox.appendChild(box);
     });
 }
 </script>
